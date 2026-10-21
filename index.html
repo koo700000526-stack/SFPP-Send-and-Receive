@@ -253,7 +253,7 @@
       <hr>
       <div>
         <div class="sec"><b class="bg-blue-600">4</b><span id="poTitle">PROCESS ORDER NUMBER &amp; สแกน BARCODE</span></div>
-        <p class="text-sm text-slate-500 -mt-2 mb-3">กรอกตัวเลข หรือกดสแกน Barcode / QR Code (ต้องกรอกอย่างน้อย 1 Line)</p>
+        <p class="text-sm text-slate-500 -mt-2 mb-3">กรอกเลข 9 หลัก หรือกดสแกน · ห้ามซ้ำกัน · กรอกอย่างน้อย 1 Line</p>
         <div id="poG" class="space-y-3"></div>
       </div>
 
@@ -366,14 +366,27 @@ function renderDept(){
   group($('deptG'),Object.keys(CFG),'opt d',d=>d===s.dept,d=>{s.dept=d;renderDept();renderLines();personField($('personBox'),'rc','-- กรุณาเลือกชื่อพนักงาน --',CFG[d].people);},
     d=>{ const l=CFG[d].lines; return `<span class="flex-1"><span class="block text-lg">${d}</span><span class="block text-sm font-medium text-slate-500">ฝ่าย ${d} (Line ${l[0]}-${l.at(-1)})</span></span><i class="!order-2"></i>`; });
 }
+function dupOf(n,val){
+  for(const l of CFG[s.dept].lines){ if(l!==n){ const o=$('po'+l); if(o&&o.value===val) return l; } }
+  return 0;
+}
+function checkPo(){
+  CFG[s.dept].lines.forEach(n=>{
+    const el=$('po'+n); if(!el) return;
+    el.value=el.value.replace(/\D/g,'').slice(0,9);
+    const d=el.value.length===9?dupOf(n,el.value):0, msg=$('poMsg'+n);
+    el.style.borderColor=d?'#e11d48':''; msg.textContent=d?`ซ้ำกับ Line ${d}`:''; msg.classList.toggle('hidden',!d);
+  });
+}
 function renderLines(){
   const ls=CFG[s.dept].lines;
   $('poTitle').textContent=`PROCESS ORDER NUMBER & สแกน BARCODE (${s.dept.toUpperCase()})`;
   $('poG').innerHTML=ls.map(n=>{ const c=LINE_CLR[n-1]; return `<div class="rounded-2xl border p-4 ${BOX[c]}">
     <label for="po${n}" class="font-bold block mb-2">Process order Number (Line ${n})</label>
-    <div class="flex gap-2"><input id="po${n}" class="fld font-mono" inputmode="numeric" autocomplete="off" placeholder="Process order Number">
-    <button type="button" data-scan="${n}" class="scanBtn flex-none px-4 rounded-2xl font-bold" style="--rgb:${LRGB[c]}">📷 สแกน</button></div></div>`; }).join('');
+    <div class="flex gap-2"><input id="po${n}" data-po class="fld font-mono" inputmode="numeric" maxlength="9" autocomplete="off" placeholder="เลข 9 หลัก">
+    <button type="button" data-scan="${n}" class="scanBtn flex-none px-4 rounded-2xl font-bold" style="--rgb:${LRGB[c]}">📷 สแกน</button></div><div id="poMsg${n}" class="text-sm font-semibold text-rose-600 mt-2 hidden"></div></div>`; }).join('');
   document.querySelectorAll('[data-scan]').forEach(b=>b.onclick=()=>startScan(b.dataset.scan));
+  document.querySelectorAll('[data-po]').forEach(i=>i.oninput=checkPo);
 }
 function fillDateSel(){
   const y0=new Date().getFullYear();
@@ -392,19 +405,114 @@ $('date').onchange=()=>{ const v=$('date').value;
 $('todayBtn').onclick=()=>{ $('date').value=todayLocal(); $('date').onchange(); };
 $('nowBtn').onclick=()=>$('time').value=nowLocal();
 
+/* ---------- Code 128 decoder (อ่านบาร์โค้ดจากรูป) ---------- */
+const C128="212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 114131 311141 411131 211412 211214 211232".split(' ').map(p=>p.split('').map(Number));
+const C128STOP=[2,3,3,1,1,1,2];
+function c128Sym(d,p){
+  if(p+6>d.length) return null;
+  let s=0; for(let k=0;k<6;k++) s+=d[p+k]; if(s<=0) return null;
+  let bv=-1,be=1e9;
+  for(let v=0;v<106;v++){ let e=0; for(let k=0;k<6;k++){ const x=d[p+k]*11/s-C128[v][k]; e+=x*x; } if(e<be){be=e;bv=v;} }
+  return {v:bv,e:be};
+}
+function c128Text(v){
+  let mode=v[0]===105?'C':v[0]===104?'B':'A', out='';
+  for(let i=1;i<v.length-1;i++){ const c=v[i];
+    if(mode==='C'){ if(c<100) out+=String(c).padStart(2,'0'); else if(c===100) mode='B'; else if(c===101) mode='A'; }
+    else if(c<96) out+=String.fromCharCode(mode==='B'?32+c:(c<64?32+c:c-64));
+    else if(c===99) mode='C'; else if(c===100&&mode==='A') mode='B'; else if(c===101&&mode==='B') mode='A'; }
+  return out;
+}
+function c128Runs(d){
+  for(let i=0;i+6<d.length;i++){
+    let s=0; for(let k=0;k<6;k++) s+=d[i+k];
+    let st=-1;
+    for(let v=103;v<=105;v++){ let e=0; for(let k=0;k<6;k++){ const x=d[i+k]*11/s-C128[v][k]; e+=x*x; } if(e<0.8){st=v;break;} }
+    if(st<0) continue;
+    const vals=[st]; let p=i+6;
+    while(vals.length<48){
+      if(p+7<=d.length && vals.length>=3){
+        let z=0; for(let k=0;k<7;k++) z+=d[p+k]; let e=0;
+        for(let k=0;k<7;k++){ const x=d[p+k]*13/z-C128STOP[k]; e+=x*x; }
+        if(e<2){
+          const n=vals.length; let c=vals[0]; for(let j=1;j<n-1;j++) c+=j*vals[j];
+          if(c%103===vals[n-1]) return c128Text(vals);
+          break;
+        }
+      }
+      const m=c128Sym(d,p); if(!m||m.e>1.2) break; vals.push(m.v); p+=6;
+    }
+  }
+  return null;
+}
+function c128Row(row,mult){
+  const n=row.length,B=48,nb=Math.ceil(n/B),lo=new Float32Array(nb),hi=new Float32Array(nb);
+  for(let b=0;b<nb;b++){ let a=1e9,z=-1e9; for(let i=b*B;i<Math.min(n,b*B+B);i++){ const v=row[i]; if(v<a)a=v; if(v>z)z=v; } lo[b]=a; hi[b]=z; }
+  const T=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const b=(i/B)|0; let a=lo[b],z=hi[b];
+    if(b>0){a=Math.min(a,lo[b-1]);z=Math.max(z,hi[b-1]);}
+    if(b<nb-1){a=Math.min(a,lo[b+1]);z=Math.max(z,hi[b+1]);}
+    T[i]=(z-a<40)?-1:a+(z-a)*mult;
+  }
+  const e=[];
+  for(let i=0;i<n-1;i++){ const a=row[i]-T[i],b=row[i+1]-T[i+1]; if((a<0)!==(b<0)) e.push(i+a/(a-b)+.5); }
+  if(e.length<30) return null;
+  const d=[]; for(let k=0;k<e.length-1;k++) d.push(e[k+1]-e[k]);
+  return c128Runs(d)||c128Runs(d.slice().reverse());
+}
+function c128Rows(g,w,h){
+  const step=Math.max(2,Math.floor(h/160)), row=new Float32Array(w);
+  for(let y=1;y<h-1;y+=step){
+    for(let x=0;x<w;x++) row[x]=(g[(y-1)*w+x]+g[y*w+x]+g[(y+1)*w+x])/3;
+    for(const m of [.5,.38,.62]){ const r=c128Row(row,m); if(r) return r; }
+  }
+  return null;
+}
+function c128Gray(g,w,h){
+  let r=c128Rows(g,w,h); if(r) return r;
+  const t=new Float32Array(w*h);
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++) t[x*h+y]=g[y*w+x];
+  return c128Rows(t,h,w);
+}
+async function decodeImageFile(f){
+  const url=URL.createObjectURL(f);
+  const img=await new Promise((ok,no)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=no; i.src=url; });
+  URL.revokeObjectURL(url);
+  let W=img.naturalWidth, H=img.naturalHeight; const sc=W>1800?1800/W:(W<900?2:1);
+  W=Math.round(W*sc); H=Math.round(H*sc);
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d',{willReadFrequently:true}); ctx.drawImage(img,0,0,W,H);
+  const px=ctx.getImageData(0,0,W,H).data, g=new Float32Array(W*H);
+  for(let i=0,j=0;i<g.length;i++,j+=4) g[i]=0.299*px[j]+0.587*px[j+1]+0.114*px[j+2];
+  return c128Gray(g,W,H);
+}
+
 /* ---------- barcode scan ---------- */
 let scanner=null;
+function applyScan(n,txt){
+  const val=(String(txt).match(/\d+/g)||[]).find(x=>x.length===9);
+  if(!val) return toast(false,'ไม่ใช่เลข 9 หลัก ลองสแกนใหม่หรือพิมพ์เอง');
+  const d=dupOf(+n,val); if(d) return toast(false,`เลขนี้ใช้แล้วใน Line ${d}`);
+  $('po'+n).value=val; checkPo(); toast(true,`Line ${n}: ${val}`);
+}
 function startScan(n){
   openModal(`<div class="flex justify-between items-center mb-3"><b>สแกน Line ${n}</b><button onclick="closeModal()" class="text-2xl px-2">✕</button></div>
-    <div id="reader" class="rounded-2xl overflow-hidden bg-black min-h-[200px]"></div><p id="scanMsg" class="text-sm text-slate-500 mt-3">เล็งกล้องไปที่ Barcode / QR Code</p>`);
-  if(!window.Html5Qrcode){ $('scanMsg').textContent='โหลดตัวสแกนไม่สำเร็จ กรุณากรอกตัวเลขเอง'; return; }
+    <div id="reader" class="rounded-2xl overflow-hidden bg-black min-h-[200px]"></div><p id="scanMsg" class="text-sm text-slate-500 mt-3">เล็งกล้องไปที่ Barcode / QR Code</p>
+    <label class="block mt-3 text-center py-3 rounded-2xl border-2 border-blue-300 text-blue-700 font-bold cursor-pointer">🖼 ถ่ายรูป / เลือกจากคลังรูป<input id="scanFile" type="file" accept="image/*" class="hidden"></label>`);
+  $('scanFile').onchange=async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    stopScan(); $('scanMsg').textContent='กำลังอ่านบาร์โค้ดจากรูป...';
+    try{
+      const txt=await decodeImageFile(f);
+      if(txt){ closeModal(); applyScan(n,txt); }
+      else $('scanMsg').textContent='อ่านบาร์โค้ดจากรูปไม่ได้ ลองถ่ายให้ชัดและใกล้ขึ้น หรือพิมพ์เอง';
+    }catch(err){ $('scanMsg').textContent='เปิดรูปไม่ได้ ลองใหม่อีกครั้ง'; }
+  };
+  if(!window.Html5Qrcode){ $('scanMsg').textContent='เปิดกล้องสดไม่ได้ ใช้ปุ่มถ่ายรูปด้านล่างแทน'; return; }
   scanner=new Html5Qrcode('reader');
-  scanner.start({facingMode:'environment'},{fps:10,qrbox:{width:260,height:160}},txt=>{
-    const m=txt.match(/\d{6,}/); const val=m?m[0]:txt.replace(/\D/g,'');
-    closeModal();
-    if(!val) return toast(false,'อ่านได้แต่ไม่พบตัวเลข Order');
-    $('po'+n).value=val; toast(true,`Line ${n}: ${val}`);
-  },()=>{}).catch(()=>{ $('scanMsg').textContent='เปิดกล้องไม่ได้ (ต้องใช้ https และอนุญาตกล้อง) กรุณากรอกตัวเลขเอง'; });
+  scanner.start({facingMode:'environment'},{fps:10,qrbox:{width:260,height:160}},txt=>{ closeModal(); applyScan(n,txt); },()=>{})
+    .catch(()=>{ $('scanMsg').textContent='เปิดกล้องสดไม่ได้ (ต้องใช้ https และอนุญาตกล้อง) ใช้ปุ่มถ่ายรูปด้านล่างแทน'; });
 }
 function stopScan(){ if(scanner){ const sc=scanner; scanner=null; sc.stop().then(()=>sc.clear()).catch(()=>{}); } }
 
@@ -414,9 +522,11 @@ $('f').onsubmit=async e=>{
   const date=$('date').value, time=$('time').value;
   if(!date||!time) return toast(false,'กรุณาระบุวันที่และเวลา');
   const who=person('rc'); if(!who) return toast(false,'กรุณาระบุชื่อ '+s.type.who);
-  const orders={};
+  const orders={}, seen={};
   for(let n=1;n<=6;n++){ const el=$('po'+n), v=el?el.value.trim():'';
-    if(v&&!/^\d+$/.test(v)) return toast(false,`Line ${n}: ต้องเป็นตัวเลขเท่านั้น`);
+    if(v&&!/^\d{9}$/.test(v)) return toast(false,`Line ${n}: ต้องเป็นตัวเลข 9 หลักพอดี`);
+    if(v&&seen[v]) return toast(false,`Line ${n} ซ้ำกับ Line ${seen[v]}`);
+    if(v) seen[v]=n;
     orders['processOrderLine'+n]=v; }
   if(!Object.values(orders).some(Boolean)) return toast(false,'กรอก Process order อย่างน้อย 1 Line');
   const qa=person('qa'); if(!qa) return toast(false,'กรุณาระบุ QA ผู้ส่ง SFPP');
@@ -596,4 +706,3 @@ document.addEventListener('touchstart',()=>{},{passive:true});
 </script>
 </body>
 </html>
-
