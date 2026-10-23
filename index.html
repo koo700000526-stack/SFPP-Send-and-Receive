@@ -152,6 +152,13 @@
   .stat .k{display:flex;align-items:center;gap:.4rem;font-size:.8rem;font-weight:600;color:#64748b}
   .stat .v{font-weight:700;font-size:.9rem;margin-top:.25rem;line-height:1.25}
   .stat .n{font-size:2rem;font-weight:800;color:#2563eb;line-height:1.1;margin-top:.15rem}
+
+  #histBtn{--rgb:8,145,178;background:#fff!important;color:rgb(var(--rgb))!important;border:2px solid rgba(var(--rgb),.4)!important}
+  #histBtn:active{background:rgb(var(--rgb))!important;color:#fff!important}
+  #histBack,#histRefresh{min-height:2.5rem}
+
+  #saveKey{--rgb:51,65,85;background:#fff!important;color:rgb(var(--rgb))!important;border:2px solid rgba(var(--rgb),.4)!important}
+  #saveKey:active{background:rgb(var(--rgb))!important;color:#fff!important;border-color:rgb(var(--rgb))!important}
 </style>
 </head>
 <body class="min-h-screen p-3 sm:p-6 text-slate-800">
@@ -185,6 +192,7 @@
       <div class="stat"><div class="k">บันทึกแล้ว</div><div class="n"><span id="cnt">0</span></div></div>
     </div>
 
+    <button id="histBtn" class="w-full py-3.5 rounded-2xl font-bold">📋 ประวัติรับ-ส่งคืน ย้อนหลัง 7 วัน</button>
     <div class="grid grid-cols-2 gap-3">
       <button id="shareBtn" class="py-3 rounded-2xl font-bold">🔗 แชร์ลิงก์ฟอร์ม</button>
       <button class="adminBtn py-3 rounded-2xl font-bold">🛡 Admin</button>
@@ -273,6 +281,21 @@
     </div>
   </form>
 </section>
+
+<!-- ========== HISTORY ========== -->
+<section id="histView" class="hidden space-y-3">
+  <header class="bg-white rounded-2xl border border-slate-200 p-3 flex items-center gap-3">
+    <button id="histBack" class="text-sm font-bold border border-slate-200 rounded-xl px-3 py-2 flex-none">← หน้าแรก</button>
+    <div class="flex-1 font-bold">📋 ประวัติ 7 วันล่าสุด</div>
+    <button id="histRefresh" class="text-xl border border-slate-200 rounded-xl px-3 py-1 flex-none" aria-label="รีเฟรช">↻</button>
+  </header>
+  <div class="bg-white rounded-2xl border border-slate-200 p-3 space-y-3">
+    <input id="hq" class="fld" placeholder="ค้นหาเลข Process order หรือชื่อ" autocomplete="off">
+    <div id="hf" class="grid grid-cols-3 gap-2"></div>
+    <div id="hSrc" class="text-sm text-slate-500"></div>
+  </div>
+  <div id="hList" class="space-y-3"></div>
+</section>
 </div>
 
 <div id="toast" role="alert" class="hidden fixed top-3 left-1/2 -translate-x-1/2 z-[60] max-w-[92vw] px-5 py-3 rounded-2xl shadow-xl text-sm font-semibold"></div>
@@ -282,9 +305,9 @@
 
 <script>
 const CFG = {
-  Blending:{lines:[1,2,3,4], people:["Santi","Jukapong","Somporn","Seksan","Chalermvuth","Sanya","Thun","Jirasak"]},
+  Blending:{lines:[1,2,3,4], people:["Santi","Somporn","Seksan","Chalermvuth","Sanya","Thun","Jirasak"]},
   Extruder:{lines:[1,2,3,4], people:["Thanaphat","Pattaraphong","Kriangkrai","Sab","Sirisak","Teerapol","Kittisak","Piya","Niran","Sompong","Samart","Prasit"]},
-  LPC:{lines:[5,6], people:["Kiattisak","Supanya","Arnat"]}
+  LPC:{lines:[5,6], people:["Kiattisak","Supanya","Jukapong","Arnat"]}
 };
 let QA = ["Chalinee","Natdanai","Watchara","Nuttapong","Pirom","Wanna","Parichat","Theeraphong","Wichuda"];
 const TYPES = [
@@ -342,7 +365,7 @@ function refreshStatus(){
 }
 
 /* ---------- navigation ---------- */
-function show(v){ $('home').classList.toggle('hidden',v!=='home'); $('formView').classList.toggle('hidden',v!=='form'); window.scrollTo(0,0); }
+function show(v){ const ids={home:'home',form:'formView',hist:'histView'}; Object.keys(ids).forEach(k=>$(ids[k]).classList.toggle('hidden',k!==v)); window.scrollTo(0,0); }
 $('goForm').onclick=()=>show('form');
 $('goHome').onclick=()=>{ show('home'); refreshStatus(); };
 $('shareBtn').onclick=async()=>{
@@ -536,7 +559,7 @@ $('f').onsubmit=async e=>{
   const btn=$('submit'); btn.disabled=true; btn.textContent='กำลังบันทึก...';
   const hook=LS.get('hook',''); let sent=false;
   if(hook){ try{ await fetch(hook,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({...rec,spreadsheetId:LS.get('sheetId','')})}); sent=true; }catch(err){} }
+      body:JSON.stringify({...rec,key:LS.get('key','')})}); sent=true; }catch(err){} }
   const all=LS.get('records',[]); all.push({...rec,sent}); LS.set('records',all);
   btn.disabled=false; btn.textContent='➤ บันทึกข้อมูล (Submit SFPP)';
   refreshStatus();
@@ -580,6 +603,9 @@ function adminPanel(){
     <label class="lbl mt-5">Webhook URL (Google Apps Script หรือ Power Automate)</label>
     <input id="aHook" class="fld font-mono text-xs" placeholder="https://script.google.com/macros/s/.../exec" value="${esc(LS.get('hook',''))}">
     <button id="saveHook" class="mt-2 px-5 py-3 rounded-2xl bg-blue-700 text-white font-bold">💾 บันทึก Webhook URL</button>
+    <label class="lbl mt-5">รหัสลับ (Access key) — ต้องตรงกับ ACCESS_KEY ใน Code.gs</label>
+    <input id="aKey" class="fld font-mono text-xs" placeholder="เช่น sfpp-7h3k9x2m" maxlength="64" autocomplete="off" value="${esc(LS.get('key',''))}">
+    <button id="saveKey" class="mt-2 px-5 py-3 rounded-2xl font-bold">🔑 บันทึกรหัสลับ</button>
     <hr class="my-5">
     <div class="flex gap-2 flex-wrap">
       <input id="aPin" class="fld !w-28 !min-h-0 !py-2" inputmode="numeric" maxlength="4" placeholder="PIN ใหม่" autocomplete="off"><button id="newPin" class="px-4 py-2 rounded-xl border border-slate-300 text-sm font-bold">⚙ ตั้ง PIN ใหม่</button>
@@ -600,6 +626,7 @@ function adminPanel(){
       <button data-del="${esc(r.id)}" class="text-rose-600 font-bold">ลบ</button></div>`).join(''):'<p class="text-sm text-slate-400">ยังไม่มีรายการ</p>'}</div>`);
   $('saveSheet').onclick=()=>{ const v=$('aSheet').value.trim(); if(!v){ LS.set('sheetId',''); refreshStatus(); return toast(true,'ยกเลิกการเชื่อมต่อ Sheet แล้ว'); }
     const m=v.match(/\/d\/([a-zA-Z0-9_-]+)/); if(!m) return toast(false,'ไม่พบ Spreadsheet ID ใน URL'); LS.set('sheetId',m[1]); refreshStatus(); toast(true,'เชื่อมต่อ Google Sheet แล้ว'); };
+  $('saveKey').onclick=()=>{ const v=$('aKey').value.trim(); if(!/^[\w.\-]{0,64}$/.test(v)) return toast(false,'ใช้ได้เฉพาะตัวอักษรอังกฤษ ตัวเลข _ - .'); LS.set('key',v); toast(true,v?'บันทึกรหัสลับแล้ว':'ลบรหัสลับแล้ว'); };
   $('saveHook').onclick=()=>{ const v=$('aHook').value.trim(); if(v&&!isHookUrl(v)) return toast(false,'URL ต้องเป็นลิงก์ Google Apps Script (/exec) หรือ Power Automate'); LS.set('hook',v); refreshStatus(); toast(true,v?'บันทึก Webhook แล้ว':'ลบ Webhook แล้ว'); };
   $('newPin').onclick=()=>{ const p=$('aPin').value.trim(); if(!/^\d{4}$/.test(p)) return toast(false,'PIN ต้องเป็นตัวเลข 4 หลัก'); LS.set('pin',p); $('aPin').value=''; toast(true,'เปลี่ยน PIN แล้ว'); };
   $('resetPin').onclick=()=>{ LS.set('pin','1234'); toast(true,'รีเซ็ต PIN เป็น 1234 แล้ว'); };
@@ -628,11 +655,13 @@ function exportCsv(){
 }
 
 /* ---------- config via share link ---------- */
+// ล็อกปลายทางให้รับเฉพาะสคริปต์ของคุณ: ใส่ Deployment ID (ส่วนระหว่าง /macros/s/ กับ /exec) ในเครื่องหมายคำพูด
+const PIN_SCRIPT='';
 function isHookUrl(u){
   try{
     const x=new URL(u); if(x.protocol!=='https:') return false;
     const h=x.hostname;
-    if(h==='script.google.com') return /\/exec$/.test(x.pathname);                       // Google Apps Script
+    if(h==='script.google.com') return /\/exec$/.test(x.pathname) && (!PIN_SCRIPT || x.pathname.includes('/s/'+PIN_SCRIPT+'/'));                       // Google Apps Script
     return h.endsWith('.logic.azure.com') || h.endsWith('.api.powerplatform.com');        // Power Automate
   }catch(e){ return false; }
 }
@@ -668,7 +697,7 @@ function redoAdmin(){ const sc=$('mBody').scrollTop; adminPanel(); $('mBody').sc
 function shareUrl(){
   const base=location.href.split('#')[0], hook=LS.get('hook',''), sheet=LS.get('sheetId','');
   if(!hook) return base;
-  const b64=btoa(unescape(encodeURIComponent(JSON.stringify({h:hook,s:sheet,p:LS.get('staff',null)}))));
+  const b64=btoa(unescape(encodeURIComponent(JSON.stringify({h:hook,s:sheet,p:LS.get('staff',null),k:LS.get('key','')}))));
   return base+'#cfg='+encodeURIComponent(b64);
 }
 function loadCfg(){
@@ -678,9 +707,10 @@ function loadCfg(){
     const ok=isHookUrl(c.h||'');
     const sid=/^[\w-]+$/.test(c.s||'')?c.s:'';
     const stf=cleanStaff(c.p);
-    const changed=c.h!==LS.get('hook','') || sid!==LS.get('sheetId','') || JSON.stringify(stf)!==JSON.stringify(LS.get('staff',null));
+    const key=/^[\w.\-]{0,64}$/.test(c.k||'')?(c.k||''):'';
+    const changed=c.h!==LS.get('hook','') || key!==LS.get('key','') || sid!==LS.get('sheetId','') || JSON.stringify(stf)!==JSON.stringify(LS.get('staff',null));
     if(ok && changed){
-      window.pendingCfg={h:c.h,s:sid,p:stf};
+      window.pendingCfg={h:c.h,s:sid,p:stf,k:key};
     }
   }catch(e){}
   history.replaceState(null,'',location.pathname+location.search);
@@ -688,10 +718,67 @@ function loadCfg(){
 
 function askCfg(){
   const c=window.pendingCfg; if(!c) return; window.pendingCfg=null;
-  openModal(`<h2 class="font-bold text-lg mb-2">ตั้งค่าจากลิงก์</h2><p class="text-slate-600 mb-4">ตั้งค่าการเชื่อมต่อ Google Sheet และรายชื่อพนักงานจากลิงก์นี้หรือไม่? กดตกลงเฉพาะลิงก์ที่ได้รับจากแอดมินของคุณ</p><div class="flex gap-3"><button id="cfgNo" class="flex-1 py-3 rounded-2xl border font-bold">ยกเลิก</button><button id="cfgYes" class="flex-1 py-3 rounded-2xl bg-emerald-600 text-white font-bold">ตกลง</button></div>`);
+  openModal(`<h2 class="font-bold text-lg mb-2">ตั้งค่าจากลิงก์</h2><p class="text-slate-600 mb-4">ตั้งค่าการเชื่อมต่อ Google Sheet และรายชื่อพนักงานจากลิงก์นี้หรือไม่? กดตกลงเฉพาะลิงก์ที่ได้รับจากแอดมินของคุณ</p><p class="text-xs font-mono break-all text-slate-500 mb-4">ปลายทาง: …${esc(c.h.slice(-22))}</p><div class="flex gap-3"><button id="cfgNo" class="flex-1 py-3 rounded-2xl border font-bold">ยกเลิก</button><button id="cfgYes" class="flex-1 py-3 rounded-2xl bg-emerald-600 text-white font-bold">ตกลง</button></div>`);
   $('cfgNo').onclick=closeModal;
-  $('cfgYes').onclick=()=>{ LS.set('hook',c.h); LS.set('sheetId',c.s); LS.set('staff',c.p); applyStaff(); refreshPeople(); refreshStatus(); closeModal(); toast(true,'ตั้งค่าเรียบร้อย'); };
+  $('cfgYes').onclick=()=>{ LS.set('hook',c.h); LS.set('sheetId',c.s); LS.set('staff',c.p); LS.set('key',c.k||''); applyStaff(); refreshPeople(); refreshStatus(); closeModal(); toast(true,'ตั้งค่าเรียบร้อย'); };
 }
+
+/* ---------- history (ประวัติ 7 วันล่าสุด) ---------- */
+RGB.all='37,99,235';
+const H={rows:[],f:'all',src:''};
+function norm(r){
+  return {date:r.date||'',time:r.time||'',actionType:r.actionType||'',shift:r.shift||'',department:r.department||'',
+    receiverName:r.receiverName||'',qaSenderName:r.qaSenderName||'',
+    po:[1,2,3,4,5,6].map(n=>r['processOrderLine'+n]||'').filter(Boolean)};
+}
+function ts(r){
+  const m=String(r.date).match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/); if(!m) return 0;
+  const t=String(r.time||'').split(':');
+  return new Date(+m[3],MON.indexOf(m[2]),+m[1],+t[0]||0,+t[1]||0,+t[2]||0).getTime();
+}
+function lastDays(n){
+  const out=[]; for(let i=0;i<n;i++){ const d=new Date(); d.setDate(d.getDate()-i); out.push(`${pad(d.getDate())}-${MON[d.getMonth()]}-${d.getFullYear()}`); }
+  return out;
+}
+function localHist(){ const ok=lastDays(7); return LS.get('records',[]).filter(r=>ok.includes(r.date)).map(norm); }
+async function loadHistory(){
+  $('hList').innerHTML='<p class="text-center text-slate-500 py-8">กำลังโหลด...</p>';
+  const hook=LS.get('hook',''), sid=LS.get('sheetId',''); let rows=null, src='';
+  if(/^https:\/\/script\.google\.com\//.test(hook)){
+    try{
+      const ctl=new AbortController(), tm=setTimeout(()=>ctl.abort(),12000); let d;
+      try{ d=await (await fetch(`${hook}?action=history&days=7&key=${encodeURIComponent(LS.get('key',''))}`,{signal:ctl.signal})).json(); } finally{ clearTimeout(tm); }
+      if(d&&d.ok){ rows=d.rows.map(a=>norm({date:a[0],time:a[1],actionType:a[2],shift:a[3],department:a[4],receiverName:a[5],
+        processOrderLine1:a[6],processOrderLine2:a[7],processOrderLine3:a[8],processOrderLine4:a[9],processOrderLine5:a[10],processOrderLine6:a[11],qaSenderName:a[12]}));
+        src='ข้อมูลจาก Google Sheet (ทุกเครื่อง)'; }
+    }catch(e){}
+  }
+  if(!rows){ rows=localHist(); src=hook?'ดึงจาก Sheet ไม่ได้ แสดงเฉพาะรายการในเครื่องนี้':'แสดงเฉพาะรายการในเครื่องนี้ (ยังไม่ได้ตั้งค่า Webhook)'; }
+  rows.sort((a,b)=>ts(b)-ts(a)); H.rows=rows; H.src=src; renderHist();
+}
+function histCard(r){
+  const rc=r.actionType.startsWith('Receive'), c=rc?'22,163,74':'217,119,6';
+  return `<div class="bg-white rounded-2xl border border-slate-200 p-4" style="border-left:6px solid rgb(${c})">
+    <div class="flex justify-between items-start gap-2"><div class="font-bold">${esc(r.date)} <span class="font-mono">${esc(r.time)}</span></div>
+    <span class="rounded-full px-3 py-0.5 text-sm font-bold" style="background:rgba(${c},.12);color:rgb(${c})">${rc?'📥 รับ':'📤 ส่งคืน'}</span></div>
+    <div class="text-sm text-slate-600 mt-1">${esc(r.department)} · กะ ${esc(r.shift)}</div>
+    <div class="mt-1">${rc?'ผู้รับ':'ผู้ส่งคืน'}: <b>${esc(r.receiverName)}</b> <span class="text-slate-400">·</span> QA: <b>${esc(r.qaSenderName)}</b></div>
+    <div class="mt-2 flex flex-wrap gap-2">${r.po.map(p=>`<span class="font-mono text-sm rounded-lg bg-slate-100 px-2 py-1">${esc(p)}</span>`).join('')||'<span class="text-sm text-slate-400">ไม่มี Process order</span>'}</div></div>`;
+}
+function renderHist(){
+  const q=$('hq').value.trim().toLowerCase();
+  const rows=H.rows.filter(r=>(H.f==='all'||r.actionType===H.f)&&(!q||[r.receiverName,r.qaSenderName,r.department,r.shift].concat(r.po).join(' ').toLowerCase().includes(q)));
+  $('hSrc').textContent=`${H.src} · ${rows.length} รายการ`;
+  let lastD=''; $('hList').innerHTML=rows.length?rows.map(r=>{ const hd=r.date!==lastD?(lastD=r.date,`<div class="font-bold text-slate-600 pt-2">📅 ${esc(r.date)}</div>`):''; return hd+histCard(r); }).join(''):'<p class="text-center text-slate-500 py-8">ไม่พบรายการใน 7 วันล่าสุด</p>';
+}
+function renderHistFilter(){
+  group($('hf'),[{v:'all',html:'ทั้งหมด'},{v:TYPES[0].v,html:'📥 รับ'},{v:TYPES[1].v,html:'📤 ส่งคืน'}],'sh',i=>i.v===H.f,i=>{H.f=i.v;renderHistFilter();renderHist();},i=>i.html);
+}
+$('histBtn').onclick=()=>{ show('hist'); loadHistory(); };
+$('histBack').onclick=()=>{ show('home'); refreshStatus(); };
+$('histRefresh').onclick=loadHistory;
+$('hq').oninput=renderHist;
+renderHistFilter();
 
 /* ---------- init ---------- */
 fillDateSel(); $('date').value=todayLocal(); $('date').onchange(); $('time').value=nowLocal();
