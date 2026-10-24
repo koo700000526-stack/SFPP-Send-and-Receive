@@ -159,6 +159,8 @@
 
   #saveKey{--rgb:51,65,85;background:#fff!important;color:rgb(var(--rgb))!important;border:2px solid rgba(var(--rgb),.4)!important}
   #saveKey:active{background:rgb(var(--rgb))!important;color:#fff!important;border-color:rgb(var(--rgb))!important}
+
+  .staff .adminBtn,.staff #shareBtn,.staff #staffLink{display:none!important}
 </style>
 </head>
 <body class="min-h-screen p-3 sm:p-6 text-slate-800">
@@ -574,6 +576,7 @@ $('clearBtn').onclick=()=>{ clearInputs(); personField($('personBox'),'rc','-- �
 let pin='', showPin=false;
 document.querySelectorAll('.adminBtn').forEach(b=>b.onclick=pinModal);
 function pinModal(){
+  if(isStaff()){ toast(false,'โหมดพนักงาน: ไม่มีสิทธิ์เข้าหน้า Admin'); return; }
   pin=''; showPin=false;
   const isDefault=LS.get('pin','1234')==='1234';
   openModal(`<div class="text-right"><button onclick="closeModal()" class="text-2xl">✕</button></div>
@@ -591,7 +594,7 @@ function pinModal(){
 }
 function drawPin(){ $('pinBoxes').innerHTML=[0,1,2,3].map(i=>`<div class="w-14 h-16 rounded-2xl border-2 ${i===pin.length?'border-blue-500':'border-slate-200'} bg-slate-50 grid place-items-center text-2xl font-bold">${pin[i]?(showPin?pin[i]:'●'):'<span class="text-slate-300">•</span>'}</div>`).join(''); }
 function pinKey(k){ $('pinErr').textContent=''; if(k==='C')pin=''; else if(k==='B')pin=pin.slice(0,-1); else if(pin.length<4)pin+=k; drawPin(); if(pin.length===4)checkPin(); }
-function checkPin(){ if(pin===LS.get('pin','1234')) adminPanel(); else { pin=''; drawPin(); $('pinErr').textContent='รหัสไม่ถูกต้อง'; $('pinErr').className='text-rose-600 font-bold'; } }
+function checkPin(){ if(pin===LS.get('pin','1234')){ LS.set('role','admin'); applyRole(); adminPanel(); } else { pin=''; drawPin(); $('pinErr').textContent='รหัสไม่ถูกต้อง'; $('pinErr').className='text-rose-600 font-bold'; } }
 
 function sheetUrlOf(id){ return id?`https://docs.google.com/spreadsheets/d/${id}`:''; }
 function adminPanel(){
@@ -708,7 +711,7 @@ function loadCfg(){
     const sid=/^[\w-]+$/.test(c.s||'')?c.s:'';
     const stf=cleanStaff(c.p);
     const key=/^[\w.\-]{0,64}$/.test(c.k||'')?(c.k||''):'';
-    const changed=c.h!==LS.get('hook','') || key!==LS.get('key','') || sid!==LS.get('sheetId','') || JSON.stringify(stf)!==JSON.stringify(LS.get('staff',null));
+    const changed=LS.get('role','')==='' || c.h!==LS.get('hook','') || key!==LS.get('key','') || sid!==LS.get('sheetId','') || JSON.stringify(stf)!==JSON.stringify(LS.get('staff',null));
     if(ok && changed){
       window.pendingCfg={h:c.h,s:sid,p:stf,k:key};
     }
@@ -716,11 +719,13 @@ function loadCfg(){
   history.replaceState(null,'',location.pathname+location.search);
 }
 
+const isStaff=()=>LS.get('role','')==='staff';
+function applyRole(){ document.body.classList.toggle('staff',isStaff()); }
 function askCfg(){
   const c=window.pendingCfg; if(!c) return; window.pendingCfg=null;
-  openModal(`<h2 class="font-bold text-lg mb-2">ตั้งค่าจากลิงก์</h2><p class="text-slate-600 mb-4">ตั้งค่าการเชื่อมต่อ Google Sheet และรายชื่อพนักงานจากลิงก์นี้หรือไม่? กดตกลงเฉพาะลิงก์ที่ได้รับจากแอดมินของคุณ</p><p class="text-xs font-mono break-all text-slate-500 mb-4">ปลายทาง: …${esc(c.h.slice(-22))}</p><div class="flex gap-3"><button id="cfgNo" class="flex-1 py-3 rounded-2xl border font-bold">ยกเลิก</button><button id="cfgYes" class="flex-1 py-3 rounded-2xl bg-emerald-600 text-white font-bold">ตกลง</button></div>`);
+  openModal(`<h2 class="font-bold text-lg mb-2">ตั้งค่าจากลิงก์</h2><p class="text-slate-600 mb-4">ตั้งค่าการเชื่อมต่อ Google Sheet และรายชื่อพนักงานจากลิงก์นี้หรือไม่? กดตกลงเฉพาะลิงก์ที่ได้รับจากแอดมินของคุณ เครื่องนี้จะเข้าโหมดพนักงาน (ไม่มีหน้า Admin)</p><p class="text-xs font-mono break-all text-slate-500 mb-4">ปลายทาง: …${esc(c.h.slice(-22))}</p><div class="flex gap-3"><button id="cfgNo" class="flex-1 py-3 rounded-2xl border font-bold">ยกเลิก</button><button id="cfgYes" class="flex-1 py-3 rounded-2xl bg-emerald-600 text-white font-bold">ตกลง</button></div>`);
   $('cfgNo').onclick=closeModal;
-  $('cfgYes').onclick=()=>{ LS.set('hook',c.h); LS.set('sheetId',c.s); LS.set('staff',c.p); LS.set('key',c.k||''); applyStaff(); refreshPeople(); refreshStatus(); closeModal(); toast(true,'ตั้งค่าเรียบร้อย'); };
+  $('cfgYes').onclick=()=>{ LS.set('hook',c.h); LS.set('sheetId',c.s); LS.set('staff',c.p); LS.set('key',c.k||''); if(LS.get('role','')!=='admin') LS.set('role','staff'); applyRole(); applyStaff(); refreshPeople(); refreshStatus(); closeModal(); toast(true,'ตั้งค่าเรียบร้อย'); };
 }
 
 /* ---------- history (ประวัติ 7 วันล่าสุด) ---------- */
@@ -782,7 +787,7 @@ renderHistFilter();
 
 /* ---------- init ---------- */
 fillDateSel(); $('date').value=todayLocal(); $('date').onchange(); $('time').value=nowLocal();
-loadCfg(); applyStaff();
+loadCfg(); applyStaff(); applyRole();
 renderType(); renderShift(); renderDept(); renderLines();
 personField($('personBox'),'rc','-- กรุณาเลือกชื่อพนักงาน --',CFG.Blending.people);
 personField($('qaBox'),'qa','-- กรุณาเลือกชื่อพนักงาน QA --',QA);
