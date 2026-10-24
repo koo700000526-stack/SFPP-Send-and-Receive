@@ -166,10 +166,14 @@
   #saveKey:active{background:rgb(var(--rgb))!important;color:#fff!important;border-color:rgb(var(--rgb))!important}
 
   .staff .adminBtn,.staff #shareBtn,.staff #staffLink{display:none!important}
+
+  #testConn{--rgb:8,145,178;background:#fff!important;color:rgb(var(--rgb))!important;border:2px solid rgba(var(--rgb),.4)!important}
+  #testConn:active{background:rgb(var(--rgb))!important;color:#fff!important;border-color:rgb(var(--rgb))!important}
 </style>
 </head>
 <body class="min-h-screen p-3 sm:p-6 text-slate-800">
 <div class="max-w-xl mx-auto">
+<button id="pendBar" class="hidden w-full mb-3 px-4 py-3 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-900 font-bold text-left">⏳ มีรายการรอส่งเข้า Sheet <b id="pendN">0</b> รายการ — แตะเพื่อส่งใหม่</button>
 
 <!-- ========== HOME ========== -->
 <section id="home" class="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
@@ -312,9 +316,9 @@
 
 <script>
 const CFG = {
-  Blending:{lines:[1,2,3,4], people:["Santi","Somporn","Seksan","Chalermvuth","Sanya","Thun","Jirasak"]},
+  Blending:{lines:[1,2,3,4], people:["Santi","Jukapong","Somporn","Seksan","Chalermvuth","Sanya","Thun","Jirasak"]},
   Extruder:{lines:[1,2,3,4], people:["Thanaphat","Pattaraphong","Kriangkrai","Sab","Sirisak","Teerapol","Kittisak","Piya","Niran","Sompong","Samart","Prasit"]},
-  LPC:{lines:[5,6], people:["Kiattisak","Supanya","Jukapong","Arnat"]}
+  LPC:{lines:[5,6], people:["Kiattisak","Supanya","Arnat"]}
 };
 let QA = ["Chalinee","Natdanai","Watchara","Nuttapong","Pirom","Wanna","Parichat","Theeraphong","Wichuda"];
 const TYPES = [
@@ -341,8 +345,8 @@ function todayLocal(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.ge
 function nowLocal(){ const d=new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
 function fmtDate(v){ const p=(v||'').split('-'); return p.length===3 ? `${p[2]}-${MON[+p[1]-1]}-${p[0]}` : ''; }
 function toast(ok, msg){
-  const t=$('toast'); t.textContent=(ok?'✅ ':'⚠️ ')+msg;
-  t.className='fixed top-3 left-1/2 -translate-x-1/2 z-[60] max-w-[92vw] px-5 py-3 rounded-2xl shadow-xl text-sm font-semibold '+(ok?'bg-emerald-600 text-white':'bg-rose-600 text-white');
+  const t=$('toast'), w=ok==='warn'; t.textContent=(w?'⏳ ':ok?'✅ ':'⚠️ ')+msg;
+  t.className='fixed top-3 left-1/2 -translate-x-1/2 z-[60] max-w-[92vw] px-5 py-3 rounded-2xl shadow-xl text-sm font-semibold '+(w?'bg-amber-500 text-white':ok?'bg-emerald-600 text-white':'bg-rose-600 text-white');
   clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.add('hidden'),4000);
 }
 function openModal(html){ $('mBody').innerHTML=html; $('modal').classList.remove('hidden'); $('modal').classList.add('flex'); }
@@ -369,6 +373,7 @@ function refreshStatus(){
   $('stHook').textContent=hook?'เชื่อมต่อแล้ว':'ยังไม่เชื่อมต่อ'; $('lHook').className='led '+(hook?'on':'off');
   [['hSheet','Google Sheet',!!sheet],['hHook','Webhook',!!hook]].forEach(([id,n,on])=>{ const el=$(id); el.className='led '+(on?'on':'off'); el.setAttribute('aria-label',n+(on?' เชื่อมต่อแล้ว':' ยังไม่เชื่อมต่อ')); });
   $('cnt').textContent=LS.get('records',[]).length;
+  updatePend();
 }
 
 /* ---------- navigation ---------- */
@@ -564,14 +569,15 @@ $('f').onsubmit=async e=>{
   const rec={id:'REC-'+Date.now(),timestamp:new Date().toISOString(),date:fmtDate(date),time,actionType:s.type.v,shift:s.shift,
     department:s.dept,receiverName:who,qaSenderName:qa,notes:$('notes').value.trim(),...orders};
   const btn=$('submit'); btn.disabled=true; btn.textContent='กำลังบันทึก...';
-  const hook=LS.get('hook',''); let sent=false;
-  if(hook){ try{ await fetch(hook,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({...rec,key:LS.get('key','')})}); sent=true; }catch(err){} }
-  const all=LS.get('records',[]); all.push({...rec,sent}); LS.set('records',all);
+  const hook=LS.get('hook','');
+  const all=LS.get('records',[]); all.push({...rec,sent:false,localOnly:!hook}); LS.set('records',all);   // เก็บในเครื่องก่อนเสมอ
+  let sent=false;
+  if(hook){ sent=await postRec(rec); if(sent){ const a=LS.get('records',[]), x=a.find(y=>y.id===rec.id); if(x){ x.sent=true; LS.set('records',a); } } }
   btn.disabled=false; btn.textContent='➤ บันทึกข้อมูล (Submit SFPP)';
   refreshStatus();
-  toast(true, hook ? (sent?'ส่งเข้า Google Sheet แล้ว':'ส่งเข้า Sheet ไม่สำเร็จ (เก็บในเครื่องแล้ว)') : 'บันทึกในเครื่องแล้ว (ยังไม่ได้ตั้งค่า Webhook)');
-  if(hook&&!sent) return;
+  if(!hook) toast(true,'บันทึกในเครื่องแล้ว (ยังไม่ได้ตั้งค่า Webhook)');
+  else if(sent){ toast(true,'ส่งเข้า Google Sheet แล้ว'); flushPending(); }
+  else toast('warn','ไม่มีสัญญาณ: เก็บในเครื่องแล้ว จะส่งให้อัตโนมัติเมื่อมีสัญญาณ');
   clearInputs();
 };
 function clearInputs(){ renderLines(); $('notes').value=''; $('time').value=nowLocal(); }
@@ -613,7 +619,7 @@ function adminPanel(){
     <button id="saveHook" class="mt-2 px-5 py-3 rounded-2xl bg-blue-700 text-white font-bold">💾 บันทึก Webhook URL</button>
     <label class="lbl mt-5">รหัสลับ (Access key) — ต้องตรงกับ ACCESS_KEY ใน Code.gs</label>
     <input id="aKey" class="fld font-mono text-xs" placeholder="เช่น sfpp-7h3k9x2m" maxlength="64" autocomplete="off" value="${esc(LS.get('key',''))}">
-    <button id="saveKey" class="mt-2 px-5 py-3 rounded-2xl font-bold">🔑 บันทึกรหัสลับ</button>
+    <div class="flex flex-wrap gap-2 mt-2"><button id="saveKey" class="px-5 py-3 rounded-2xl font-bold">🔑 บันทึกรหัสลับ</button><button id="testConn" class="px-5 py-3 rounded-2xl font-bold">🔌 ทดสอบการเชื่อมต่อ</button></div><div id="connMsg" class="hidden"></div>
     <hr class="my-5">
     <div class="flex gap-2 flex-wrap">
       <input id="aPin" class="fld !w-28 !min-h-0 !py-2" inputmode="numeric" maxlength="4" placeholder="PIN ใหม่" autocomplete="off"><button id="newPin" class="px-4 py-2 rounded-xl border border-slate-300 text-sm font-bold">⚙ ตั้ง PIN ใหม่</button>
@@ -634,8 +640,9 @@ function adminPanel(){
       <button data-del="${esc(r.id)}" class="text-rose-600 font-bold">ลบ</button></div>`).join(''):'<p class="text-sm text-slate-400">ยังไม่มีรายการ</p>'}</div>`);
   $('saveSheet').onclick=()=>{ const v=$('aSheet').value.trim(); if(!v){ LS.set('sheetId',''); refreshStatus(); return toast(true,'ยกเลิกการเชื่อมต่อ Sheet แล้ว'); }
     const m=v.match(/\/d\/([a-zA-Z0-9_-]+)/); if(!m) return toast(false,'ไม่พบ Spreadsheet ID ใน URL'); LS.set('sheetId',m[1]); refreshStatus(); toast(true,'เชื่อมต่อ Google Sheet แล้ว'); };
-  $('saveKey').onclick=()=>{ const v=$('aKey').value.trim(); if(!/^[\w.\-]{0,64}$/.test(v)) return toast(false,'ใช้ได้เฉพาะตัวอักษรอังกฤษ ตัวเลข _ - .'); LS.set('key',v); toast(true,v?'บันทึกรหัสลับแล้ว':'ลบรหัสลับแล้ว'); };
-  $('saveHook').onclick=()=>{ const v=$('aHook').value.trim(); if(v&&!isHookUrl(v)) return toast(false,hookWhy(v)); LS.set('hook',v); refreshStatus(); toast(true,v?'บันทึก Webhook แล้ว':'ลบ Webhook แล้ว'); };
+  $('saveKey').onclick=()=>{ const v=$('aKey').value.trim(); if(!/^[\w.\-]{0,64}$/.test(v)) return toast(false,'ใช้ได้เฉพาะตัวอักษรอังกฤษ ตัวเลข _ - .'); LS.set('key',v); toast(true,v?'บันทึกรหัสลับแล้ว':'ลบรหัสลับแล้ว'); runConnTest(); };
+  $('testConn').onclick=()=>{ $('connMsg').className='mt-3 text-sm text-slate-500'; $('connMsg').textContent='กำลังทดสอบ...'; runConnTest(); };
+  $('saveHook').onclick=()=>{ const v=$('aHook').value.trim(); if(v&&!isHookUrl(v)) return toast(false,hookWhy(v)); LS.set('hook',v); refreshStatus(); toast(true,v?'บันทึก Webhook แล้ว':'ลบ Webhook แล้ว'); if(v) runConnTest(); };
   $('newPin').onclick=()=>{ const p=$('aPin').value.trim(); if(!/^\d{4}$/.test(p)) return toast(false,'PIN ต้องเป็นตัวเลข 4 หลัก'); LS.set('pin',p); $('aPin').value=''; toast(true,'เปลี่ยน PIN แล้ว'); };
   $('resetPin').onclick=()=>{ LS.set('pin','1234'); toast(true,'รีเซ็ต PIN เป็น 1234 แล้ว'); };
   $('csv').onclick=exportCsv;
@@ -742,7 +749,7 @@ function askCfg(){
   const c=window.pendingCfg; if(!c) return; window.pendingCfg=null;
   openModal(`<h2 class="font-bold text-lg mb-2">ตั้งค่าจากลิงก์</h2><p class="text-slate-600 mb-4">ตั้งค่าการเชื่อมต่อ Google Sheet และรายชื่อพนักงานจากลิงก์นี้หรือไม่? กดตกลงเฉพาะลิงก์ที่ได้รับจากแอดมินของคุณ เครื่องนี้จะเข้าโหมดพนักงาน (ไม่มีหน้า Admin)</p><p class="text-xs font-mono break-all text-slate-500 mb-4">ปลายทาง: …${esc(c.h.slice(-22))}</p><div class="flex gap-3"><button id="cfgNo" class="flex-1 py-3 rounded-2xl border font-bold">ยกเลิก</button><button id="cfgYes" class="flex-1 py-3 rounded-2xl bg-emerald-600 text-white font-bold">ตกลง</button></div>`);
   $('cfgNo').onclick=closeModal;
-  $('cfgYes').onclick=()=>{ LS.set('hook',c.h); LS.set('sheetId',c.s); LS.set('staff',c.p); LS.set('key',c.k||''); if(LS.get('role','')!=='admin') LS.set('role','staff'); applyRole(); applyStaff(); refreshPeople(); refreshStatus(); closeModal(); toast(true,'ตั้งค่าเรียบร้อย'); };
+  $('cfgYes').onclick=()=>{ LS.set('hook',c.h); LS.set('sheetId',c.s); LS.set('staff',c.p); LS.set('key',c.k||''); if(LS.get('role','')!=='admin') LS.set('role','staff'); applyRole(); applyStaff(); refreshPeople(); refreshStatus(); closeModal(); toast(true,'ตั้งค่าเรียบร้อย'); runConnTest(true); };
 }
 
 /* ---------- history (ประวัติ 7 วันล่าสุด) ---------- */
@@ -802,6 +809,62 @@ $('histRefresh').onclick=loadHistory;
 $('hq').oninput=renderHist;
 renderHistFilter();
 
+/* ---------- คิวส่งข้อมูลที่ค้าง (ไม่มีสัญญาณ) ---------- */
+async function postRec(r){
+  const hook=LS.get('hook',''); if(!hook) return false;
+  const ctl=new AbortController(), tm=setTimeout(()=>ctl.abort(),15000);
+  try{
+    const {sent,localOnly,...rec}=r;
+    await fetch(hook,{method:'POST',mode:'no-cors',signal:ctl.signal,headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({...rec,key:LS.get('key','')})});
+    return true;
+  }catch(e){ return false; } finally{ clearTimeout(tm); }
+}
+const pendingCount=()=>LS.get('hook','')?LS.get('records',[]).filter(r=>!r.sent&&!r.localOnly).length:0;
+function updatePend(){ const n=pendingCount(); $('pendBar').classList.toggle('hidden',!n); $('pendN').textContent=n; }
+let flushing=false;
+async function flushPending(manual){
+  if(flushing||!LS.get('hook','')) return; flushing=true; let ok=0;
+  try{
+    for(const r of LS.get('records',[]).filter(x=>!x.sent&&!x.localOnly)){      // เก่าสุดก่อน
+      if(!(await postRec(r))) break;                                               // ยังไม่มีสัญญาณ: หยุด รอรอบหน้า
+      const a=LS.get('records',[]), x=a.find(y=>y.id===r.id); if(x){ x.sent=true; LS.set('records',a); } ok++;
+    }
+  } finally { flushing=false; }
+  refreshStatus();
+  if(ok) toast(true,`ส่งรายการที่ค้างเข้า Sheet แล้ว ${ok} รายการ`);
+  else if(manual) toast('warn',pendingCount()?'ยังส่งไม่ได้ ตรวจสัญญาณอินเทอร์เน็ต':'ไม่มีรายการค้าง');
+}
+window.addEventListener('online',()=>flushPending());
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) flushPending(); });
+setInterval(()=>{ if(pendingCount()) flushPending(); },60000);
+$('pendBar').onclick=()=>flushPending(true);
+
+/* ---------- ทดสอบการเชื่อมต่อ + รหัสลับ ---------- */
+async function runConnTest(quiet){
+  let level='bad', msg;
+  const hook=LS.get('hook','');
+  if(!hook) msg='ยังไม่ได้ตั้งค่า Webhook URL';
+  else if(!/^https:\/\/script\.google\.com\//.test(hook)) msg='ทดสอบรหัสลับได้เฉพาะ Webhook ของ Google Apps Script';
+  else{
+    const ctl=new AbortController(), tm=setTimeout(()=>ctl.abort(),12000);
+    try{
+      const j=await (await fetch(`${hook}?action=ping&key=${encodeURIComponent(LS.get('key',''))}`,{signal:ctl.signal})).json();
+      if(j.auth===undefined){ level='warn'; msg='เชื่อมต่อได้ แต่โค้ดใน Apps Script ยังเป็นเวอร์ชันเก่า ให้วาง Code.gs ใหม่แล้ว Deploy เวอร์ชันใหม่'; }
+      else if(j.auth&&j.keyRequired){ level='ok'; msg='เชื่อมต่อได้ และรหัสลับถูกต้อง'; }
+      else if(j.auth){ level='warn'; msg='เชื่อมต่อได้ แต่ฝั่ง Apps Script ยังไม่ได้ตั้ง ACCESS_KEY (ว่างอยู่) จึงไม่มีการป้องกัน'; }
+      else msg='รหัสลับไม่ตรงกับ ACCESS_KEY ใน Code.gs ข้อมูลที่ส่งจะถูกปฏิเสธ';
+    }catch(e){ msg='เชื่อมต่อไม่ได้ ตรวจสัญญาณ ลิงก์ /exec และสิทธิ์เข้าถึง "ทุกคน"'; }
+    finally{ clearTimeout(tm); }
+  }
+  const box=$('connMsg');
+  if(box){
+    box.className='mt-3 p-3 rounded-2xl text-sm font-semibold border '+(level==='ok'?'bg-emerald-50 border-emerald-300 text-emerald-900':level==='warn'?'bg-amber-50 border-amber-300 text-amber-900':'bg-rose-50 border-rose-300 text-rose-900');
+    box.textContent=(level==='ok'?'✅ ':level==='warn'?'⚠️ ':'❌ ')+msg;
+  } else if(!quiet||level!=='ok') toast(level==='ok'?true:level==='warn'?'warn':false,msg);
+  return level;
+}
+
 /* ---------- init ---------- */
 fillDateSel(); $('date').value=todayLocal(); $('date').onchange(); $('time').value=nowLocal();
 loadCfg(); applyStaff(); applyRole();
@@ -813,6 +876,7 @@ $('homeDate').textContent=new Date().toLocaleDateString('en-GB',{weekday:'long',
 askCfg();
 document.querySelectorAll('.appIcon').forEach(i=>i.src=document.querySelector('link[rel=apple-touch-icon]').href);
 document.addEventListener('touchstart',()=>{},{passive:true});
+flushPending();
 </script>
 </body>
 </html>
