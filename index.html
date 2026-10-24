@@ -630,7 +630,7 @@ function adminPanel(){
   $('saveSheet').onclick=()=>{ const v=$('aSheet').value.trim(); if(!v){ LS.set('sheetId',''); refreshStatus(); return toast(true,'ยกเลิกการเชื่อมต่อ Sheet แล้ว'); }
     const m=v.match(/\/d\/([a-zA-Z0-9_-]+)/); if(!m) return toast(false,'ไม่พบ Spreadsheet ID ใน URL'); LS.set('sheetId',m[1]); refreshStatus(); toast(true,'เชื่อมต่อ Google Sheet แล้ว'); };
   $('saveKey').onclick=()=>{ const v=$('aKey').value.trim(); if(!/^[\w.\-]{0,64}$/.test(v)) return toast(false,'ใช้ได้เฉพาะตัวอักษรอังกฤษ ตัวเลข _ - .'); LS.set('key',v); toast(true,v?'บันทึกรหัสลับแล้ว':'ลบรหัสลับแล้ว'); };
-  $('saveHook').onclick=()=>{ const v=$('aHook').value.trim(); if(v&&!isHookUrl(v)) return toast(false,'URL ต้องเป็นลิงก์ Google Apps Script (/exec) หรือ Power Automate'); LS.set('hook',v); refreshStatus(); toast(true,v?'บันทึก Webhook แล้ว':'ลบ Webhook แล้ว'); };
+  $('saveHook').onclick=()=>{ const v=$('aHook').value.trim(); if(v&&!isHookUrl(v)) return toast(false,hookWhy(v)); LS.set('hook',v); refreshStatus(); toast(true,v?'บันทึก Webhook แล้ว':'ลบ Webhook แล้ว'); };
   $('newPin').onclick=()=>{ const p=$('aPin').value.trim(); if(!/^\d{4}$/.test(p)) return toast(false,'PIN ต้องเป็นตัวเลข 4 หลัก'); LS.set('pin',p); $('aPin').value=''; toast(true,'เปลี่ยน PIN แล้ว'); };
   $('resetPin').onclick=()=>{ LS.set('pin','1234'); toast(true,'รีเซ็ต PIN เป็น 1234 แล้ว'); };
   $('csv').onclick=exportCsv;
@@ -659,7 +659,7 @@ function exportCsv(){
 
 /* ---------- config via share link ---------- */
 // ล็อกปลายทางให้รับเฉพาะสคริปต์ของคุณ: ใส่ Deployment ID (ส่วนระหว่าง /macros/s/ กับ /exec) ในเครื่องหมายคำพูด
-const PIN_SCRIPT='AKfycbw9qeiQp7rzI3EVHxqg93Y-2f4bEb83239ZTIlNFNNTXfeTMeTJJnv__0AjFGBAILFy';
+const PIN_SCRIPT='AKfycbwJcMpJmXA_IXOwD_iKE_EH6QKEysWoUxXPL4Y0WeCX0MfpdY_JAcSqNal2ot1Hlfwl';
 function isHookUrl(u){
   try{
     const x=new URL(u); if(x.protocol!=='https:') return false;
@@ -667,6 +667,18 @@ function isHookUrl(u){
     if(h==='script.google.com') return /\/exec$/.test(x.pathname) && (!PIN_SCRIPT || x.pathname.includes('/s/'+PIN_SCRIPT+'/'));                       // Google Apps Script
     return h.endsWith('.logic.azure.com') || h.endsWith('.api.powerplatform.com');        // Power Automate
   }catch(e){ return false; }
+}
+// บอกสาเหตุที่ชัดเจนเมื่อ URL ถูกปฏิเสธ
+function hookWhy(u){
+  try{
+    const x=new URL(u);
+    if(x.protocol!=='https:') return 'ลิงก์ต้องขึ้นต้นด้วย https://';
+    if(x.hostname==='script.google.com'){
+      if(!/\/exec$/.test(x.pathname)) return 'ลิงก์ต้องลงท้ายด้วย /exec (ลิงก์ /dev หรือหน้าแก้โค้ดใช้ไม่ได้)';
+      if(PIN_SCRIPT && !x.pathname.includes('/s/'+PIN_SCRIPT+'/')) return 'ID ของสคริปต์ไม่ตรงกับ PIN_SCRIPT ที่ล็อกไว้ใน index.html';
+    }
+  }catch(e){ return 'รูปแบบลิงก์ไม่ถูกต้อง ตรวจว่าวางครบและไม่มีช่องว่าง'; }
+  return 'URL ต้องเป็นลิงก์ Google Apps Script (/exec) หรือ Power Automate';
 }
 /* ---------- staff lists (แก้ไขได้ในหน้า Admin) ---------- */
 const DEF={Blending:CFG.Blending.people.slice(),Extruder:CFG.Extruder.people.slice(),LPC:CFG.LPC.people.slice(),QA:QA.slice()};
