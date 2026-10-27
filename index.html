@@ -169,6 +169,15 @@
 
   #testConn{--rgb:8,145,178;background:#fff!important;color:rgb(var(--rgb))!important;border:2px solid rgba(var(--rgb),.4)!important}
   #testConn:active{background:rgb(var(--rgb))!important;color:#fff!important;border-color:rgb(var(--rgb))!important}
+
+  /* ===== วันที่/เวลา ===== */
+  .chip{padding:.4rem .9rem;border-radius:999px;font-weight:700;font-size:.9rem;border:2px solid rgba(37,99,235,.35);color:#2563eb;background:#fff;min-height:2.4rem}
+  .chip:active{background:#2563eb;color:#fff;border-color:#2563eb}
+  #dD,#dM,#dY{padding-left:.7rem;padding-right:.3rem;font-size:1.05rem!important;font-weight:600}
+  .tsel{font-size:1.6rem!important;font-weight:700;text-align:center;text-align-last:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;min-height:3.6rem!important;padding-left:.4rem;padding-right:.4rem}
+
+  #todayBtn{--rgb:37,99,235;background:#fff!important;color:rgb(var(--rgb))!important;border:2px solid rgba(var(--rgb),.45)!important;box-shadow:0 1px 2px rgba(15,23,42,.06)!important}
+  #todayBtn:active{background:rgb(var(--rgb))!important;color:#fff!important;border-color:rgb(var(--rgb))!important}
 </style>
 </head>
 <body class="min-h-screen p-3 sm:p-6 text-slate-800">
@@ -238,23 +247,9 @@
       <div class="space-y-5">
         <div class="sec"><b class="bg-blue-600">1</b>ข้อมูลวัน เวลา และ SHIFT</div>
         <div>
-          <div class="flex justify-between items-center mb-1">
-            <label class="lbl !mb-0" for="dD">📅 วันที่ (Date) <span class="text-rose-500">*</span></label>
-          </div>
-          <input type="hidden" id="date">
-          <div class="grid grid-cols-3 gap-2">
-            <select class="fld" id="dD" aria-label="วัน"></select>
-            <select class="fld" id="dM" aria-label="เดือน"></select>
-            <select class="fld" id="dY" aria-label="ปี ค.ศ."></select>
-          </div>
-          <div class="flex justify-between text-sm mt-1.5"><span id="dLong" class="text-slate-600"></span><button type="button" id="todayBtn" class="font-bold text-blue-600">Today</button></div>
-        </div>
-        <div>
-          <div class="flex justify-between items-center mb-1">
-            <label class="lbl !mb-0" for="time">🕑 Time / เวลาบันทึก <span class="text-rose-500">*</span></label>
-            <button type="button" id="nowBtn" class="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1">⚡ ตอนนี้ (Now)</button>
-          </div>
-          <input class="fld font-mono" type="time" id="time" step="1" required>
+          <input type="hidden" id="date"><input type="hidden" id="time">
+          <div id="dtCard"></div>
+          <div class="flex justify-center mt-3"><button type="button" id="todayBtn" class="px-6 py-2 rounded-full text-base font-bold"></button></div>
         </div>
         <div><span class="lbl">Shift * <span class="float-right font-semibold text-slate-400 text-xs">กะการทำงาน</span></span><div id="shiftG" class="grid grid-cols-4 gap-2"></div></div>
         <div><span class="lbl">Receive ( รับ SFPP ) &amp; Return ( ส่งคืน SFPP ) *</span><div id="typeG" class="space-y-3"></div></div>
@@ -423,22 +418,33 @@ function renderLines(){
   document.querySelectorAll('[data-scan]').forEach(b=>b.onclick=()=>startScan(b.dataset.scan));
   document.querySelectorAll('[data-po]').forEach(i=>i.oninput=checkPo);
 }
-function fillDateSel(){
-  const y0=new Date().getFullYear();
-  $('dD').innerHTML=Array.from({length:31},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('');
-  $('dM').innerHTML=MON.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
-  $('dY').innerHTML=[y0-1,y0,y0+1].map(y=>`<option value="${y}">${y}</option>`).join('');
+/* ---------- วัน-เวลา: กดปุ่ม "วันนี้" เพื่อบันทึกวันและเวลาปัจจุบัน ---------- */
+function renderDT(){
+  const v=$('date').value, t=$('time').value, card=$('dtCard'), btn=$('todayBtn');
+  if(!v||!t){
+    card.style.background='';
+    card.className='rounded-3xl p-5 text-center border-2 border-dashed border-slate-300 bg-slate-50 text-slate-400';
+    card.innerHTML='<div class="text-4xl mb-1">🗓️</div><div class="font-bold text-slate-500">ยังไม่ได้บันทึกวัน-เวลา</div><div class="text-sm mt-1">กดปุ่ม "วันนี้" ด้านล่างเพื่อบันทึกเวลาตอนนี้</div>';
+    btn.textContent='📅 วันนี้';
+    return;
+  }
+  const p=v.split('-'), wd=new Date(+p[0],+p[1]-1,+p[2]).toLocaleDateString('en-GB',{weekday:'long'});
+  card.className='rounded-3xl p-5 text-center text-white shadow-lg';
+  card.style.background='linear-gradient(135deg,#1e3a8a,#2563eb 60%,#0ea5e9)';
+  card.innerHTML=`<div class="text-sm font-semibold tracking-widest uppercase opacity-80">${wd}</div>
+    <div class="text-4xl font-extrabold mt-1">${+p[2]} ${MON[+p[1]-1]} ${p[0]}</div>
+    <div class="inline-block mt-3 rounded-2xl bg-white/15 border border-white/25 px-5 py-1.5 font-mono font-bold text-2xl tracking-wide" style="color:#fcd34d">${t}</div>
+    <div class="mt-3 text-sm font-semibold opacity-90">✅ บันทึกวัน-เวลาแล้ว</div>`;
+  btn.textContent='🔄 วันนี้';
 }
-['dD','dM','dY'].forEach(id=>$(id).onchange=()=>{
-  const y=+$('dY').value, m=+$('dM').value; let d=+$('dD').value;
-  d=Math.min(d,new Date(y,m,0).getDate());
-  $('date').value=`${y}-${pad(m)}-${pad(d)}`; $('date').onchange();
-});
-$('date').onchange=()=>{ const v=$('date').value;
-  const q=v.split('-'); if(q.length===3){ if(![...$('dY').options].some(o=>o.value===q[0])) $('dY').add(new Option(q[0],q[0])); $('dD').value=+q[2]; $('dM').value=+q[1]; $('dY').value=q[0]; } const p=v.split('-');
-  $('dLong').textContent=p.length===3?new Date(+p[0],+p[1]-1,+p[2]).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):''; };
-$('todayBtn').onclick=()=>{ $('date').value=todayLocal(); $('date').onchange(); };
-$('nowBtn').onclick=()=>$('time').value=nowLocal();
+function setNow(){
+  const d=new Date();
+  $('date').value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  $('time').value=`${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  renderDT();
+}
+function clearDT(){ $('date').value=''; $('time').value=''; renderDT(); }
+$('todayBtn').onclick=setNow;
 
 /* ---------- Code 128 decoder (อ่านบาร์โค้ดจากรูป) ---------- */
 const C128="212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 114131 311141 411131 211412 211214 211232".split(' ').map(p=>p.split('').map(Number));
@@ -555,7 +561,7 @@ function stopScan(){ if(scanner){ const sc=scanner; scanner=null; sc.stop().then
 $('f').onsubmit=async e=>{
   e.preventDefault();
   const date=$('date').value, time=$('time').value;
-  if(!date||!time) return toast(false,'กรุณาระบุวันที่และเวลา');
+  if(!date||!time){ $('dtCard').scrollIntoView({behavior:'smooth',block:'center'}); return toast(false,'กรุณากดปุ่ม "วันนี้" เพื่อบันทึกวันและเวลา'); }
   const who=person('rc'); if(!who) return toast(false,'กรุณาระบุชื่อ '+s.type.who);
   const orders={}, seen={};
   for(let n=1;n<=6;n++){ const el=$('po'+n), v=el?el.value.trim():'';
@@ -579,8 +585,9 @@ $('f').onsubmit=async e=>{
   else if(sent){ toast(true,'ส่งเข้า Google Sheet แล้ว'); flushPending(); }
   else toast('warn','ไม่มีสัญญาณ: เก็บในเครื่องแล้ว จะส่งให้อัตโนมัติเมื่อมีสัญญาณ');
   clearInputs();
+  show('home');   // กลับหน้าแรกทุกครั้งหลังกดบันทึก
 };
-function clearInputs(){ renderLines(); $('notes').value=''; $('time').value=nowLocal(); }
+function clearInputs(){ renderLines(); $('notes').value=''; clearDT(); }
 $('clearBtn').onclick=()=>{ clearInputs(); personField($('personBox'),'rc','-- กรุณาเลือกชื่อพนักงาน --',CFG[s.dept].people); personField($('qaBox'),'qa','-- กรุณาเลือกชื่อพนักงาน QA --',QA); };
 
 /* ---------- admin ---------- */
@@ -866,7 +873,7 @@ async function runConnTest(quiet){
 }
 
 /* ---------- init ---------- */
-fillDateSel(); $('date').value=todayLocal(); $('date').onchange(); $('time').value=nowLocal();
+renderDT();
 loadCfg(); applyStaff(); applyRole();
 renderType(); renderShift(); renderDept(); renderLines();
 personField($('personBox'),'rc','-- กรุณาเลือกชื่อพนักงาน --',CFG.Blending.people);
