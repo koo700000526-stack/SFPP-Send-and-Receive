@@ -313,7 +313,7 @@
 const CFG = {
   Blending:{lines:[1,2,3,4], people:["Santi","Somporn","Seksan","Chalermvuth","Sanya","Thun","Jirasak"]},
   Extruder:{lines:[1,2,3,4], people:["Thanaphat","Pattaraphong","Kriangkrai","Sab","Sirisak","Teerapol","Kittisak","Piya","Niran","Sompong","Samart","Prasit"]},
-  LPC:{lines:[5,6], people:["Kiattisak","Supanya","Jukapong","Arnat"]}
+  LPC:{lines:[5,6], people:["Kiattisak","Jukapong","Supanya","Arnat"]}
 };
 let QA = ["Chalinee","Natdanai","Watchara","Nuttapong","Pirom","Wanna","Parichat","Theeraphong","Wichuda"];
 const TYPES = [
@@ -425,7 +425,7 @@ function renderDT(){
     card.style.background='';
     card.className='rounded-3xl p-5 text-center border-2 border-dashed border-slate-300 bg-slate-50 text-slate-400';
     card.innerHTML='<div class="text-4xl mb-1">🗓️</div><div class="font-bold text-slate-500">ยังไม่ได้บันทึกวัน-เวลา</div><div class="text-sm mt-1">กดปุ่ม "วันนี้" ด้านล่างเพื่อบันทึกเวลาตอนนี้</div>';
-    btn.textContent='📅 วันนี้';
+    btn.textContent='วันนี้';
     return;
   }
   const p=v.split('-'), wd=new Date(+p[0],+p[1]-1,+p[2]).toLocaleDateString('en-GB',{weekday:'long'});
@@ -584,11 +584,12 @@ $('f').onsubmit=async e=>{
   if(!hook) toast(true,'บันทึกในเครื่องแล้ว (ยังไม่ได้ตั้งค่า Webhook)');
   else if(sent){ toast(true,'ส่งเข้า Google Sheet แล้ว'); flushPending(); }
   else toast('warn','ไม่มีสัญญาณ: เก็บในเครื่องแล้ว จะส่งให้อัตโนมัติเมื่อมีสัญญาณ');
-  clearInputs();
+  resetForm();
   show('home');   // กลับหน้าแรกทุกครั้งหลังกดบันทึก
 };
 function clearInputs(){ renderLines(); $('notes').value=''; clearDT(); }
-$('clearBtn').onclick=()=>{ clearInputs(); personField($('personBox'),'rc','-- กรุณาเลือกชื่อพนักงาน --',CFG[s.dept].people); personField($('qaBox'),'qa','-- กรุณาเลือกชื่อพนักงาน QA --',QA); };
+function resetForm(){ clearInputs(); refreshPeople(); }   // ล้างเลข Order, หมายเหตุ, วัน-เวลา, ชื่อผู้รับ/ผู้ส่งคืน, ชื่อ QA
+$('clearBtn').onclick=resetForm;
 
 /* ---------- admin ---------- */
 let pin='', showPin=false;
