@@ -773,7 +773,8 @@ const H={rows:[],f:'all',src:''};
 function norm(r){
   return {date:r.date||'',time:r.time||'',actionType:r.actionType||'',shift:r.shift||'',department:r.department||'',
     receiverName:r.receiverName||'',qaSenderName:r.qaSenderName||'',
-    po:[1,2,3,4,5,6].map(n=>r['processOrderLine'+n]||'').filter(Boolean)};
+    po:[1,2,3,4,5,6].map(n=>r['processOrderLine'+n]||'').filter(Boolean),
+    pol:[1,2,3,4,5,6].map(n=>({n:n,v:r['processOrderLine'+n]||''})).filter(x=>x.v)};   // เก็บเลข Line ไว้ใช้แยกสี
 }
 function ts(r){
   const m=String(r.date).match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/); if(!m) return 0;
@@ -814,7 +815,7 @@ function histCard(r){
     <span class="rounded-full px-3 py-0.5 text-sm font-bold" style="background:rgba(${c},.12);color:rgb(${c})">${rc?'📥 รับ':'📤 ส่งคืน'}</span></div>
     <div class="text-sm text-slate-600 mt-1">${esc(r.department)} · กะ ${esc(r.shift)}</div>
     <div class="mt-1">${rc?'ผู้รับ':'ผู้ส่งคืน'}: <b>${esc(r.receiverName)}</b> <span class="text-slate-400">·</span> QA: <b>${esc(r.qaSenderName)}</b></div>
-    <div class="mt-2 flex flex-wrap gap-2">${r.po.map(p=>`<span class="font-mono text-sm rounded-lg bg-slate-100 px-2 py-1">${esc(p)}</span>`).join('')||'<span class="text-sm text-slate-400">ไม่มี Process order</span>'}</div></div>`;
+    <div class="mt-2 flex flex-wrap gap-2">${r.pol.map(o=>{ const lc=LRGB[LINE_CLR[o.n-1]]; return `<span class="font-mono text-sm rounded-lg px-2 py-1 border" style="background:rgba(${lc},.12);border-color:rgba(${lc},.45);color:rgb(${lc})"><b class="font-sans text-xs opacity-80">L${o.n}</b> ${esc(o.v)}</span>`; }).join('')||'<span class="text-sm text-slate-400">ไม่มี Process order</span>'}</div></div>`;
 }
 function renderHist(){
   const q=$('hq').value.trim().toLowerCase();
