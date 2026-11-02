@@ -178,6 +178,9 @@
 
   #todayBtn{--rgb:37,99,235;background:#fff!important;color:rgb(var(--rgb))!important;border:2px solid rgba(var(--rgb),.45)!important;box-shadow:0 1px 2px rgba(15,23,42,.06)!important}
   #todayBtn:active{background:rgb(var(--rgb))!important;color:#fff!important;border-color:rgb(var(--rgb))!important}
+
+  #clearHist{--rgb:225,29,72;background:#fff!important;color:rgb(var(--rgb))!important;border:2px solid rgba(var(--rgb),.4)!important}
+  #clearHist:active{background:rgb(var(--rgb))!important;color:#fff!important;border-color:rgb(var(--rgb))!important}
 </style>
 </head>
 <body class="min-h-screen p-3 sm:p-6 text-slate-800">
@@ -301,6 +304,10 @@
     <div id="hSrc" class="text-sm text-slate-500"></div>
   </div>
   <div id="hList" class="space-y-3"></div>
+  <div class="bg-white rounded-2xl border border-slate-200 p-4 text-center space-y-2">
+    <button id="clearHist" class="px-5 py-3 rounded-2xl font-bold">🗑 ล้างประวัติในเครื่องนี้</button>
+    <p class="text-sm text-slate-500">ล้างเฉพาะรายการที่ส่งแล้วในเครื่องนี้ ไม่ลบข้อมูลใน Google Sheet และไม่ลบรายการที่ยังรอส่ง</p>
+  </div>
 </section>
 </div>
 
@@ -313,7 +320,7 @@
 const CFG = {
   Blending:{lines:[1,2,3,4], people:["Santi","Somporn","Seksan","Chalermvuth","Sanya","Thun","Jirasak"]},
   Extruder:{lines:[1,2,3,4], people:["Thanaphat","Pattaraphong","Kriangkrai","Sab","Sirisak","Teerapol","Kittisak","Piya","Niran","Sompong","Samart","Prasit"]},
-  LPC:{lines:[5,6], people:["Kiattisak","Jukapong","Supanya","Arnat"]}
+  LPC:{lines:[5,6], people:["Kiattisak","Supanya","Jukapong","Arnat"]}
 };
 let QA = ["Chalinee","Natdanai","Watchara","Nuttapong","Pirom","Wanna","Parichat","Theeraphong","Wichuda"];
 const TYPES = [
@@ -778,6 +785,13 @@ function lastDays(n){
   return out;
 }
 function localHist(){ const ok=lastDays(7); return LS.get('records',[]).filter(r=>ok.includes(r.date)).map(norm); }
+// ล้างประวัติที่เก็บในเครื่องนี้: เก็บไว้เฉพาะรายการที่ยังรอส่ง (กันข้อมูลหาย) ไม่แตะ Google Sheet
+function clearLocalHistory(){
+  const all=LS.get('records',[]), keep=all.filter(r=>!r.sent&&!r.localOnly), removed=all.length-keep.length;
+  LS.set('records',keep); refreshStatus(); loadHistory();
+  toast(removed?true:'warn', removed?`ล้างแล้ว ${removed} รายการ`+(keep.length?` (เก็บ ${keep.length} รายการที่ยังไม่ได้ส่งไว้)`:''):'ไม่มีรายการให้ล้าง');
+}
+$('clearHist').onclick=function(){ twoStep(this,clearLocalHistory,'กดอีกครั้งเพื่อยืนยัน'); };
 async function loadHistory(){
   $('hList').innerHTML='<p class="text-center text-slate-500 py-8">กำลังโหลด...</p>';
   const hook=LS.get('hook',''), sid=LS.get('sheetId',''); let rows=null, src='';
